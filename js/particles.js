@@ -273,11 +273,8 @@
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     var mat = new THREE.PointsMaterial({
       color: 0xffffff,
-      size: 1.5,
+      size: 2.4,
       sizeAttenuation: false,
-      map: makeDotTexture(),
-      transparent: true,
-      alphaTest: 0.35,
       depthWrite: false,
     });
     points = new THREE.Points(geo, mat);
