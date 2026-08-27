@@ -253,6 +253,7 @@
     openAmt += ((menuOn ? 1 : 0) - openAmt) * 0.12;
 
     var i, x, y, tx, ty, dx, dy, d, f, inv;
+    var t = performance.now() * 0.001;
     var spring = menuOn ? 0.075 : 0.09;
     var damp = 0.8;
     var mouseOn = pointer.over || pointer.active;
@@ -262,6 +263,11 @@
       y = positions[i * 3 + 1];
       tx = rest[i * 2] + (scatter[i * 2] - rest[i * 2]) * openAmt;
       ty = rest[i * 2 + 1] + (scatter[i * 2 + 1] - rest[i * 2 + 1]) * openAmt;
+      if (openAmt < 0.98) {
+        var idle = 1 - openAmt;
+        tx += Math.sin(t * 1.15 + i * 2.17) * 0.55 * idle;
+        ty += Math.cos(t * 0.97 + i * 1.73) * 0.45 * idle;
+      }
 
       vel[i * 2] += (tx - x) * spring;
       vel[i * 2 + 1] += (ty - y) * spring;
