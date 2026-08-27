@@ -1,7 +1,9 @@
-# Mun Labs
+# Insu Mun — Mun Labs
 
-Static site for [Insu Mun](https://github.com/mis8680-lab).
+Live: https://mis8680-lab.github.io
 
-White-dot portrait sampled from `assets/insu-stipple.png`. Hover or tap opens Work / About / Contact.
+Static GitHub Pages. White particle portrait. Hover/tap → Work / About / Contact.
 
-Pages-ready from `/` on `main`.
+Work: Maintainer (App Store https://apps.apple.com/app/id6784533937), DayQuest (in progress, not on the store).
+
+Stack: Three.js, vanilla static. Pages from main `/`.
