@@ -307,9 +307,6 @@
         hoverReady = true;
       }
       setPointer(ev);
-      if (!menuOn && !suppressHoverOpen && ev.pointerType === "mouse") {
-        openMenu();
-      }
     });
     window.addEventListener("pointerdown", function (ev) {
       setPointer(ev, true);
