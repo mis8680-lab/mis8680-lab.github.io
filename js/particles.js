@@ -39,6 +39,18 @@
   var menuOn = false;
   var openAmt = 0;
   var suppressHoverOpen = false;
+  var fieldClicks = 0;
+  var legoOn = false;
+  var studTex = null;
+  var colors = null;
+  var BRICK_RGB = [
+    [0.79, 0.1, 0.11],
+    [0.95, 0.8, 0.12],
+    [0.0, 0.34, 0.75],
+    [0.14, 0.55, 0.2],
+    [0.96, 0.48, 0.12],
+    [1, 1, 1],
+  ];
 
   function clamp(v, a, b) {
     return Math.max(a, Math.min(b, v));
@@ -185,6 +197,55 @@
     return !!(el && el.closest && el.closest(".hole-menu a"));
   }
 
+  function makeStudTexture() {
+    var s = 64;
+    var c = document.createElement("canvas");
+    c.width = s;
+    c.height = s;
+    var g = c.getContext("2d");
+    g.clearRect(0, 0, s, s);
+    g.fillStyle = "#b4b4b4";
+    g.beginPath();
+    if (g.roundRect) g.roundRect(3, 3, 58, 58, 7);
+    else g.rect(3, 3, 58, 58);
+    g.fill();
+    g.fillStyle = "#7a7a7a";
+    g.beginPath();
+    g.arc(32, 37, 15, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#ffffff";
+    g.beginPath();
+    g.arc(32, 30, 14, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "rgba(255,255,255,0.55)";
+    g.beginPath();
+    g.arc(27, 26, 4.5, 0, Math.PI * 2);
+    g.fill();
+    var tex = new THREE.CanvasTexture(c);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  function applyLegoMode() {
+    if (!points) return;
+    var mat = points.material;
+    if (legoOn) {
+      if (!studTex) studTex = makeStudTexture();
+      mat.map = studTex;
+      mat.vertexColors = true;
+      mat.size = 7;
+      mat.transparent = true;
+      mat.alphaTest = 0.12;
+    } else {
+      mat.map = null;
+      mat.vertexColors = false;
+      mat.size = 2.4;
+      mat.transparent = false;
+      mat.alphaTest = 0;
+    }
+    mat.needsUpdate = true;
+  }
+
   function step() {
     var L = layout();
     openAmt += ((menuOn ? 1 : 0) - openAmt) * 0.12;
@@ -242,6 +303,11 @@
     window.addEventListener("pointerdown", function (ev) {
       setPointer(ev, true);
       if (isMenuLink(ev.target)) return;
+      fieldClicks += 1;
+      if (fieldClicks % 5 === 0) {
+        legoOn = !legoOn;
+        applyLegoMode();
+      }
       if (menuOn) {
         closeMenu();
       } else {
@@ -286,13 +352,23 @@
       positions[i * 3 + 1] = rest[i * 2 + 1];
       positions[i * 3 + 2] = 0;
     }
+    colors = new Float32Array(count * 3);
+    var i, brick;
+    for (i = 0; i < count; i++) {
+      brick = BRICK_RGB[i % BRICK_RGB.length];
+      colors[i * 3] = brick[0];
+      colors[i * 3 + 1] = brick[1];
+      colors[i * 3 + 2] = brick[2];
+    }
     var geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     var mat = new THREE.PointsMaterial({
       color: 0xffffff,
       size: 2.4,
       sizeAttenuation: false,
       depthWrite: false,
+      vertexColors: false,
     });
     points = new THREE.Points(geo, mat);
     scene.add(points);

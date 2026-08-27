@@ -31,7 +31,7 @@ body.home {
   height: 100%;
   display: block;
   touch-action: none;
-  cursor: crosshair;
+  cursor: pointer;
 }
 
 .hole-menu {
