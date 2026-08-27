@@ -7,7 +7,7 @@
   var DESKTOP_W = 1280;
   var PHONE_W = 390;
   var MENU_NY = 0.46;
-  var TARGET_PARTICLES = 22000;
+  var TARGET_PARTICLES = 11000;
 
   var canvas = document.getElementById("field");
   var menu = document.getElementById("hole-menu");
