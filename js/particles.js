@@ -40,6 +40,8 @@
   var openAmt = 0;
   var suppressHoverOpen = false;
   var fieldClicks = 0;
+  var hoverOrigin = null;
+  var hoverReady = false;
   var legoOn = false;
   var studTex = null;
   var colors = null;
@@ -295,6 +297,15 @@
 
   function bind() {
     window.addEventListener("pointermove", function (ev) {
+      var p = worldFromEvent(ev);
+      if (!hoverOrigin) {
+        hoverOrigin = p;
+        return;
+      }
+      if (!hoverReady) {
+        if (Math.hypot(p.x - hoverOrigin.x, p.y - hoverOrigin.y) < 4) return;
+        hoverReady = true;
+      }
       setPointer(ev);
       if (!menuOn && !suppressHoverOpen && ev.pointerType === "mouse") {
         openMenu();
@@ -321,6 +332,8 @@
       pointer.over = false;
       pointer.active = false;
       suppressHoverOpen = false;
+      hoverOrigin = null;
+      hoverReady = false;
     });
     window.addEventListener("blur", function () {
       pointer.over = false;
