@@ -151,3 +151,25 @@ body.page {
   display: grid;
   gap: 0.45rem;
 }
+
+.stack article.work-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.work-item > div {
+  display: grid;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.work-thumb {
+  display: block;
+  flex: 0 0 81px;
+  width: 81px;
+  height: 176px;
+  object-fit: fill;
+  border-radius: 6px;
+}
