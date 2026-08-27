@@ -6,9 +6,7 @@
   var PHONE_FACE = 360;
   var DESKTOP_W = 1280;
   var PHONE_W = 390;
-  var HOLE_NY = 0.46;
-  var HOLE_RADIUS = 186;
-  var HOLE_PUSH = 152;
+  var MENU_NY = 0.46;
   var TARGET_PARTICLES = 22000;
 
   var canvas = document.getElementById("field");
@@ -31,13 +29,16 @@
   var points = null;
   var positions = null;
   var rest = null;
+  var scatter = null;
   var vel = null;
   var imgPts = null;
   var count = 0;
   var imgW = 1;
   var imgH = 1;
   var pointer = { x: 0, y: 0, active: false, over: false };
-  var holeOpen = 0;
+  var menuOn = false;
+  var openAmt = 0;
+  var suppressHoverOpen = false;
 
   function clamp(v, a, b) {
     return Math.max(a, Math.min(b, v));
@@ -55,10 +56,8 @@
       h: h,
       scale: faceH / imgH,
       yLift: h * 0.035,
-      holeX: 0,
-      holeY: (0.5 - HOLE_NY) * h,
-      holeR: HOLE_RADIUS * holeScale,
-      holePush: HOLE_PUSH * holeScale,
+      menuX: 0,
+      menuY: (0.5 - MENU_NY) * h,
       mouseR: 88 * holeScale,
       mouseForce: 16 * holeScale,
     };
@@ -124,20 +123,6 @@
     return { pts: chosen, w: w, h: h };
   }
 
-  function makeDotTexture() {
-    var c = document.createElement("canvas");
-    c.width = 32;
-    c.height = 32;
-    var g = c.getContext("2d");
-    g.beginPath();
-    g.arc(16, 16, 10, 0, Math.PI * 2);
-    g.fillStyle = "#fff";
-    g.fill();
-    var tex = new THREE.CanvasTexture(c);
-    tex.needsUpdate = true;
-    return tex;
-  }
-
   function syncRest(L) {
     var i, px, py;
     for (i = 0; i < count; i++) {
@@ -145,6 +130,28 @@
       py = imgPts[i * 3 + 1];
       rest[i * 2] = (px - imgW / 2) * L.scale;
       rest[i * 2 + 1] = (imgH / 2 - py) * L.scale + L.yLift;
+    }
+    buildScatter(L);
+  }
+
+  function hash01(i, salt) {
+    var x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453123;
+    return x - Math.floor(x);
+  }
+
+  function buildScatter(L) {
+    var i, sx, sy, rx, ry;
+    for (i = 0; i < count; i++) {
+      rx = rest[i * 2];
+      ry = rest[i * 2 + 1];
+      sx = rx + (hash01(i, 1) - 0.5) * L.w * 2.2;
+      sy = ry + (hash01(i, 2) - 0.5) * L.h * 2.2;
+      if (Math.abs(sx - L.menuX) < 100 && Math.abs(sy - L.menuY) < 120) {
+        sx += (hash01(i, 3) < 0.5 ? -1 : 1) * (140 + hash01(i, 4) * 280);
+        sy += (hash01(i, 5) - 0.5) * 320;
+      }
+      scatter[i * 2] = sx;
+      scatter[i * 2 + 1] = sy;
     }
   }
 
@@ -158,29 +165,43 @@
     }
   }
 
+  function openMenu() {
+    menuOn = true;
+    if (menu) menu.style.pointerEvents = "none";
+    setMenu(true);
+    setTimeout(function () {
+      if (menuOn && menu) menu.style.pointerEvents = "auto";
+    }, 320);
+  }
+
+  function closeMenu() {
+    menuOn = false;
+    setMenu(false);
+    suppressHoverOpen = true;
+    if (menu) menu.style.pointerEvents = "";
+  }
+
+  function isMenuLink(el) {
+    return !!(el && el.closest && el.closest(".hole-menu a"));
+  }
+
   function step() {
     var L = layout();
-    var wantHole = pointer.over || pointer.active;
-    holeOpen += ((wantHole ? 1 : 0) - holeOpen) * 0.14;
-    setMenu(holeOpen > 0.55);
+    openAmt += ((menuOn ? 1 : 0) - openAmt) * 0.12;
 
-    var i, x, y, rx, ry, dx, dy, d, f, inv, rim;
-    var spring = 0.085;
-    var damp = 0.78;
-    var hx = L.holeX;
-    var hy = L.holeY;
-    var hr = L.holeR;
-    var hp = L.holePush * holeOpen;
+    var i, x, y, tx, ty, dx, dy, d, f, inv;
+    var spring = menuOn ? 0.075 : 0.09;
+    var damp = 0.8;
     var mouseOn = pointer.over || pointer.active;
 
     for (i = 0; i < count; i++) {
       x = positions[i * 3];
       y = positions[i * 3 + 1];
-      rx = rest[i * 2];
-      ry = rest[i * 2 + 1];
+      tx = rest[i * 2] + (scatter[i * 2] - rest[i * 2]) * openAmt;
+      ty = rest[i * 2 + 1] + (scatter[i * 2 + 1] - rest[i * 2 + 1]) * openAmt;
 
-      vel[i * 2] += (rx - x) * spring;
-      vel[i * 2 + 1] += (ry - y) * spring;
+      vel[i * 2] += (tx - x) * spring;
+      vel[i * 2 + 1] += (ty - y) * spring;
 
       if (mouseOn) {
         dx = x - pointer.x;
@@ -191,26 +212,6 @@
           inv = 1 / d;
           vel[i * 2] += dx * inv * f;
           vel[i * 2 + 1] += dy * inv * f;
-        }
-      }
-
-      if (holeOpen > 0.02) {
-        dx = x - hx;
-        dy = y - hy;
-        d = Math.hypot(dx, dy);
-        if (d < hr) {
-          if (d < 0.08) {
-            vel[i * 2] += hp * 0.35;
-          } else {
-            inv = 1 / d;
-            f = (1 - d / hr);
-            f = f * f * hp * 0.55;
-            vel[i * 2] += dx * inv * f;
-            vel[i * 2 + 1] += dy * inv * f;
-            rim = (hr + 6 - d) * f * 0.08;
-            x += dx * inv * rim;
-            y += dy * inv * rim;
-          }
         }
       }
 
@@ -234,9 +235,18 @@
   function bind() {
     window.addEventListener("pointermove", function (ev) {
       setPointer(ev);
+      if (!menuOn && !suppressHoverOpen && ev.pointerType === "mouse") {
+        openMenu();
+      }
     });
     window.addEventListener("pointerdown", function (ev) {
       setPointer(ev, true);
+      if (isMenuLink(ev.target)) return;
+      if (menuOn) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
     });
     window.addEventListener("pointerup", function (ev) {
       setPointer(ev, false);
@@ -244,12 +254,18 @@
     window.addEventListener("pointerleave", function () {
       pointer.over = false;
       pointer.active = false;
+      suppressHoverOpen = false;
     });
     window.addEventListener("blur", function () {
       pointer.over = false;
       pointer.active = false;
     });
     window.addEventListener("resize", onResize);
+    if (menu) {
+      menu.addEventListener("pointerdown", function (ev) {
+        ev.stopPropagation();
+      });
+    }
   }
 
   function start(sample) {
@@ -258,6 +274,7 @@
     imgH = sample.h;
     count = imgPts.length / 3;
     rest = new Float32Array(count * 2);
+    scatter = new Float32Array(count * 2);
     vel = new Float32Array(count * 2);
     positions = new Float32Array(count * 3);
     var L = layout();
