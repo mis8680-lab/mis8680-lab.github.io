@@ -49,12 +49,13 @@
   var LOOK_YAW_MAX = 0.32;
   var LOOK_PITCH_MAX = 0.22;
   var LOOK_DEPTH = 52;
-  var HEAD_CUT = 0.56;
+  var HEAD_FULL = 0.40;
+  var HEAD_ZERO = 0.64;
   var studTex = null;
   var colors = null;
   var sizes = null;
   var baseDepth = null;
-  var isHead = null;
+  var headW = null;
   var neckY = 0;
   var pointMat = null;
   var legoMat = null;
@@ -69,6 +70,11 @@
 
   function clamp(v, a, b) {
     return Math.max(a, Math.min(b, v));
+  }
+
+  function smoothstep(e0, e1, x) {
+    var t = clamp((x - e0) / (e1 - e0), 0, 1);
+    return t * t * (3 - 2 * t);
   }
 
   function layout() {
@@ -153,7 +159,7 @@
   }
 
   function syncRest(L) {
-    var i, px, py, fx, fy, r2, sphere, lum, amp;
+    var i, px, py, fx, fy, r2, sphere, lum, amp, ny, w;
     amp = LOOK_DEPTH * L.scale;
     neckY = (imgH / 2 - imgH * 0.52) * L.scale + L.yLift;
     for (i = 0; i < count; i++) {
@@ -162,13 +168,15 @@
       lum = imgPts[i * 3 + 2];
       rest[i * 2] = (px - imgW / 2) * L.scale;
       rest[i * 2 + 1] = (imgH / 2 - py) * L.scale + L.yLift;
-      isHead[i] = py < imgH * HEAD_CUT ? 1 : 0;
+      ny = py / imgH;
+      w = 1 - smoothstep(HEAD_FULL, HEAD_ZERO, ny);
+      headW[i] = w;
       fx = (px - imgW / 2) / imgW;
       fy = (py - imgH * 0.34) / imgH;
       r2 = fx * fx + fy * fy * 1.15;
       sphere = Math.sqrt(Math.max(0, 0.2 - r2));
       baseDepth[i] = (sphere * 0.75 + (lum / 255) * 0.35) * amp;
-      if (!isHead[i]) baseDepth[i] *= 0.45;
+      baseDepth[i] *= 0.4 + 0.6 * w;
     }
     buildScatter(L);
   }
@@ -334,7 +342,7 @@
     var L = layout();
     openAmt += ((menuOn ? 1 : 0) - openAmt) * 0.12;
 
-    var i, x, y, tx, ty, rx, ry, rz, depth, rot, zN, b, idle;
+    var i, x, y, tx, ty, rx, ry, rz, depth, rot, zN, b, idle, w;
     var t = performance.now() * 0.001;
     var spring = 0.09;
     var damp = 0.8;
@@ -347,15 +355,23 @@
       x = positions[i * 3];
       y = positions[i * 3 + 1];
       depth = baseDepth[i];
-      if (isHead[i]) {
-        rot = rotateHead(rest[i * 2], rest[i * 2 + 1], depth, lookYaw, lookPitch, neckY);
+      w = headW[i];
+      if (w > 0.001) {
+        rot = rotateHead(
+          rest[i * 2],
+          rest[i * 2 + 1],
+          depth,
+          lookYaw * w,
+          lookPitch * w,
+          neckY
+        );
         rx = rot.x;
         ry = rot.y;
         rz = rot.z;
       } else {
         rx = rest[i * 2];
         ry = rest[i * 2 + 1];
-        rz = depth * 0.25;
+        rz = depth * 0.2;
       }
       tx = rx + (scatter[i * 2] - rest[i * 2]) * openAmt;
       ty = ry + (scatter[i * 2 + 1] - rest[i * 2 + 1]) * openAmt;
@@ -374,7 +390,7 @@
       positions[i * 3 + 2] = rz;
 
       zN = clamp((rz / amp + 0.2) / 1.2, 0, 1);
-      sizes[i] = (isHead[i] ? 2.2 : 1.8) + zN * (isHead[i] ? 2.8 : 1.2);
+      sizes[i] = (1.8 + 0.4 * w) + zN * (1.2 + 1.6 * w);
       if (!legoOn) {
         b = 0.48 + zN * 0.52;
         colors[i * 3] = b;
@@ -464,7 +480,7 @@
     positions = new Float32Array(count * 3);
     sizes = new Float32Array(count);
     baseDepth = new Float32Array(count);
-    isHead = new Uint8Array(count);
+    headW = new Float32Array(count);
     colors = new Float32Array(count * 3);
     var L = layout();
     applyCamera(L);
