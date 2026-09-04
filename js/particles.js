@@ -36,6 +36,7 @@
   var imgW = 1;
   var imgH = 1;
   var pointer = { x: 0, y: 0, active: false, over: false };
+  var look = { x: 0, y: 0, tracking: false };
   var menuOn = false;
   var openAmt = 0;
   var suppressHoverOpen = false;
@@ -248,10 +249,17 @@
     mat.needsUpdate = true;
   }
 
+  function setLookFromEvent(ev) {
+    var p = worldFromEvent(ev);
+    look.x = p.x;
+    look.y = p.y;
+    look.tracking = true;
+  }
+
   function lookTargets(L) {
-    if (!pointer.over) return { yaw: 0, pitch: 0 };
-    var nx = clamp(pointer.x / (L.w * 0.42), -1, 1);
-    var ny = clamp(pointer.y / (L.h * 0.42), -1, 1);
+    if (!look.tracking) return { yaw: 0, pitch: 0 };
+    var nx = clamp(look.x / (L.w * 0.42), -1, 1);
+    var ny = clamp(look.y / (L.h * 0.42), -1, 1);
     return { yaw: nx * LOOK_YAW_MAX, pitch: ny * LOOK_PITCH_MAX };
   }
 
@@ -333,6 +341,7 @@
 
   function bind() {
     window.addEventListener("pointermove", function (ev) {
+      setLookFromEvent(ev);
       var p = worldFromEvent(ev);
       if (!hoverOrigin) {
         hoverOrigin = p;
@@ -345,8 +354,9 @@
       setPointer(ev);
     });
     window.addEventListener("pointerdown", function (ev) {
+      setLookFromEvent(ev);
       setPointer(ev, true);
-      if (isMenuLink(ev.target)) return;
+      if (isMenuLink(ev.target) || (ev.target && ev.target.closest && ev.target.closest(".wordmark"))) return;
       fieldClicks += 1;
       if (fieldClicks % 5 === 0) {
         legoOn = !legoOn;
@@ -360,10 +370,19 @@
     });
     window.addEventListener("pointerup", function (ev) {
       setPointer(ev, false);
+      if (ev.pointerType === "touch" || ev.pointerType === "pen") {
+        look.tracking = false;
+      }
+    });
+    window.addEventListener("pointercancel", function () {
+      pointer.over = false;
+      pointer.active = false;
+      look.tracking = false;
     });
     window.addEventListener("pointerleave", function () {
       pointer.over = false;
       pointer.active = false;
+      look.tracking = false;
       suppressHoverOpen = false;
       hoverOrigin = null;
       hoverReady = false;
@@ -371,6 +390,7 @@
     window.addEventListener("blur", function () {
       pointer.over = false;
       pointer.active = false;
+      look.tracking = false;
     });
     window.addEventListener("resize", onResize);
     if (menu) {
