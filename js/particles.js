@@ -46,13 +46,19 @@
   var legoOn = false;
   var lookYaw = 0;
   var lookPitch = 0;
-  var LOOK_YAW_MAX = 0.34;
-  var LOOK_PITCH_MAX = 0.24;
+  var LOOK_YAW_MAX = 0.38;
+  var LOOK_PITCH_MAX = 0.26;
   var LOOK_DEPTH = 96;
+  var LOOK_TARGET_Z = 2;
+  var mouseNDC = new THREE.Vector2();
+  var lookRay = new THREE.Raycaster();
+  var lookPlane = new THREE.Plane();
+  var lookHit = new THREE.Vector3();
+  var lookTarget = new THREE.Vector3(0, 0, LOOK_TARGET_Z);
   var FACE_CX = 0.5;
   var FACE_CY = 0.35;
-  var FACE_RX = 0.22;
-  var FACE_RY = 0.30;
+  var FACE_RX = 0.20;
+  var FACE_RY = 0.28;
   var NECK_CY = 0.52;
   var NECK_RX = 0.12;
   var NECK_RY = 0.10;
@@ -299,17 +305,31 @@
   }
 
   function setLookFromEvent(ev) {
-    var p = worldFromEvent(ev);
-    look.x = p.x;
-    look.y = p.y;
-    look.tracking = true;
+    /* Wael pattern: NDC → Raycaster → camera-facing Plane; look Z fixed */
+    mouseNDC.x = (ev.clientX / window.innerWidth) * 2 - 1;
+    mouseNDC.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+    lookPlane.normal.copy(camera.position).normalize();
+    lookPlane.constant = 0;
+    lookRay.setFromCamera(mouseNDC, camera);
+    if (lookRay.ray.intersectPlane(lookPlane, lookHit)) {
+      lookTarget.set(lookHit.x, lookHit.y, LOOK_TARGET_Z);
+      look.x = lookHit.x;
+      look.y = lookHit.y;
+      look.tracking = true;
+    }
   }
 
   function lookTargets(L) {
     if (!look.tracking) return { yaw: 0, pitch: 0 };
-    var nx = clamp(look.x / (L.w * 0.42), -1, 1);
-    var ny = clamp(look.y / (L.h * 0.42), -1, 1);
-    return { yaw: nx * LOOK_YAW_MAX, pitch: ny * LOOK_PITCH_MAX };
+    /* yaw/pitch from neck pivot toward look target (fixed Z) */
+    var dx = lookTarget.x - 0;
+    var dy = lookTarget.y - neckY;
+    var dz = LOOK_TARGET_Z;
+    var yaw = Math.atan2(dx, Math.max(0.001, dz));
+    var pitch = Math.atan2(dy, Math.sqrt(dx * dx + dz * dz));
+    yaw = clamp(yaw, -LOOK_YAW_MAX, LOOK_YAW_MAX);
+    pitch = clamp(pitch, -LOOK_PITCH_MAX, LOOK_PITCH_MAX);
+    return { yaw: yaw, pitch: pitch };
   }
 
   function rotateHead(rx, ry, depth, yaw, pitch, pivotY) {
