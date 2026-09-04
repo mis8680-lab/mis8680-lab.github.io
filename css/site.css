@@ -71,33 +71,6 @@ body.home {
 }
 
 
-.wordmark {
-  position: fixed;
-  top: 1.5rem;
-  left: 1.75rem;
-  z-index: 4;
-  color: rgba(255, 255, 255, 0.92);
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 400;
-  letter-spacing: 0.22em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.wordmark:hover,
-.wordmark:focus-visible {
-  color: #fff;
-}
-
-@media (max-width: 700px) {
-  .wordmark {
-    top: 1.15rem;
-    left: 1.15rem;
-    font-size: 12px;
-    letter-spacing: 0.18em;
-  }
-}
 
 .sr-only {
   position: absolute;
