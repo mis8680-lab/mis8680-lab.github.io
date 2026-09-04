@@ -7,7 +7,7 @@
   var DESKTOP_W = 1280;
   var PHONE_W = 390;
   var MENU_NY = 0.46;
-  var TARGET_PARTICLES = 11000;
+  var TARGET_PARTICLES = 16000;
 
   var canvas = document.getElementById("field");
   var menu = document.getElementById("site-nav");
@@ -32,6 +32,7 @@
   var scatter = null;
   var vel = null;
   var imgPts = null;
+  var ptStride = 3;
   var count = 0;
   var imgW = 1;
   var imgH = 1;
@@ -48,7 +49,7 @@
   var lookPitch = 0;
   var LOOK_YAW_MAX = 0.38;
   var LOOK_PITCH_MAX = 0.26;
-  var LOOK_DEPTH = 96;
+  var LOOK_DEPTH = 170;
   var LOOK_TARGET_Z = 2;
   var mouseNDC = new THREE.Vector2();
   var lookRay = new THREE.Raycaster();
@@ -133,7 +134,7 @@
   }
 
   function sampleImage(img) {
-    var maxDim = 820;
+    var maxDim = 900;
     var s = Math.min(1, maxDim / Math.max(img.width, img.height));
     var w = Math.max(1, Math.round(img.width * s));
     var h = Math.max(1, Math.round(img.height * s));
@@ -143,49 +144,85 @@
     var ctx = c.getContext("2d", { willReadFrequently: true });
     ctx.drawImage(img, 0, 0, w, h);
     var data = ctx.getImageData(0, 0, w, h).data;
+    var occ = new Uint8Array(w * h);
     var hits = [];
-    var i, x, y, lum;
+    var i, x, y, lum, idx;
     for (y = 0; y < h; y++) {
       for (x = 0; x < w; x++) {
         i = (y * w + x) * 4;
         if (data[i + 3] < 20) continue;
         lum = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-        if (lum > 42) hits.push(x, y, lum);
+        if (lum > 42) {
+          occ[y * w + x] = 1;
+          hits.push(x, y, lum);
+        }
       }
+    }
+    function edgeDist(px, py) {
+      var r, a, sx, sy, steps, k;
+      if (!occ[py * w + px]) return 0;
+      for (r = 1; r <= 64; r += 1) {
+        steps = Math.max(8, r * 4);
+        for (k = 0; k < steps; k++) {
+          a = (k / steps) * Math.PI * 2;
+          sx = (px + Math.cos(a) * r + 0.5) | 0;
+          sy = (py + Math.sin(a) * r + 0.5) | 0;
+          if (sx < 0 || sy < 0 || sx >= w || sy >= h || !occ[sy * w + sx]) return r;
+        }
+      }
+      return 64;
     }
     var n = hits.length / 3;
     var keep = Math.min(TARGET_PARTICLES, n);
     var chosen = [];
-    if (n <= keep) return { pts: hits, w: w, h: h };
     var step = n / keep;
     var acc = 0;
-    for (i = 0; i < n && chosen.length / 3 < keep; i++) {
+    var maxEdge = 1;
+    var edges = [];
+    if (n <= keep) {
+      for (i = 0; i < n; i++) {
+        edges.push(edgeDist(hits[i * 3], hits[i * 3 + 1]));
+        if (edges[i] > maxEdge) maxEdge = edges[i];
+      }
+      for (i = 0; i < n; i++) {
+        chosen.push(hits[i * 3], hits[i * 3 + 1], hits[i * 3 + 2], edges[i] / maxEdge);
+      }
+      return { pts: chosen, w: w, h: h, stride: 4 };
+    }
+    for (i = 0; i < n && chosen.length / 4 < keep; i++) {
       acc += 1;
       if (acc >= step) {
         acc -= step;
-        chosen.push(hits[i * 3], hits[i * 3 + 1], hits[i * 3 + 2]);
+        var ed = edgeDist(hits[i * 3], hits[i * 3 + 1]);
+        if (ed > maxEdge) maxEdge = ed;
+        chosen.push(hits[i * 3], hits[i * 3 + 1], hits[i * 3 + 2], ed);
       }
     }
-    return { pts: chosen, w: w, h: h };
+    for (i = 3; i < chosen.length; i += 4) {
+      chosen[i] = chosen[i] / maxEdge;
+    }
+    return { pts: chosen, w: w, h: h, stride: 4 };
   }
 
   function syncRest(L) {
-    var i, px, py, fx, fy, r2, sphere, lum, amp, ny, w, face, neck;
+    var i, px, py, fx, fy, r2, ellip, lum, amp, ny, w, face, neck, edge, stride, o;
+    stride = ptStride || 3;
     amp = LOOK_DEPTH * L.scale;
     neckY = (imgH / 2 - imgH * FACE_CY - imgH * FACE_RY * 0.55) * L.scale + L.yLift;
     for (i = 0; i < count; i++) {
-      px = imgPts[i * 3];
-      py = imgPts[i * 3 + 1];
-      lum = imgPts[i * 3 + 2];
-      rest[i * 2] = (px - imgW / 2) * L.scale;
-      rest[i * 2 + 1] = (imgH / 2 - py) * L.scale + L.yLift;
+      o = i * stride;
+      px = imgPts[o];
+      py = imgPts[o + 1];
+      lum = imgPts[o + 2];
+      edge = stride >= 4 ? imgPts[o + 3] : 0.5;
+      /* slight jitter breaks scanline rows */
+      rest[i * 2] = (px - imgW / 2) * L.scale + (hash01(i, 1.7) - 0.5) * 0.55 * L.scale;
+      rest[i * 2 + 1] = (imgH / 2 - py) * L.scale + L.yLift + (hash01(i, 9.1) - 0.5) * 0.45 * L.scale;
       ny = py / imgH;
-      /* Face ellipse mask — outer floaters / side halo get weight 0 */
       fx = (px / imgW - FACE_CX) / FACE_RX;
       fy = (ny - FACE_CY) / FACE_RY;
       r2 = fx * fx + fy * fy;
       face = 1 - smoothstep(0.78, 1.12, Math.sqrt(Math.max(0, r2)));
-      /* Neck soft band: narrow, partial weight only */
       fx = (px / imgW - FACE_CX) / NECK_RX;
       fy = (ny - NECK_CY) / NECK_RY;
       r2 = fx * fx + fy * fy;
@@ -195,12 +232,13 @@
       w = Math.min(1, face * 1.0 + neck * 0.5);
       if (w < 0.04) w = 0;
       headW[i] = w;
-      fx = (px - imgW / 2) / imgW;
-      fy = (py - imgH * 0.34) / imgH;
-      r2 = fx * fx + fy * fy * 1.05;
-      sphere = Math.sqrt(Math.max(0, 0.26 - r2));
-      /* Z emphasis on face; torso stays flat-ish */
-      baseDepth[i] = (sphere * 0.82 + (lum / 255) * 0.38) * amp * (0.18 + 0.82 * Math.max(w, face * 0.5));
+      /* Half-ellipsoid volume (ref-like thickness) + silhouette inflate + lum relief */
+      fx = (px - imgW / 2) / (imgW * 0.36);
+      fy = (py - imgH * 0.40) / (imgH * 0.46);
+      r2 = fx * fx + fy * fy;
+      ellip = Math.sqrt(Math.max(0, 1 - r2));
+      baseDepth[i] = (ellip * 0.72 + edge * 0.38 + (lum / 255 - 0.35) * 0.22) * amp;
+      if (baseDepth[i] < 0) baseDepth[i] = 0;
     }
     buildScatter(L);
   }
@@ -428,14 +466,14 @@
       positions[i * 3 + 1] = y + vel[i * 2 + 1];
       positions[i * 3 + 2] = rz;
 
-      zN = clamp((rz / amp + 0.05) / 1.05, 0, 1);
-      zN = zN * zN * (3 - 2 * zN);
-      sizes[i] = 1.4 + zN * 4.6;
+      zN = clamp(rz / Math.max(1, amp), 0, 1);
+      zN = Math.pow(zN, 0.85);
+      sizes[i] = 1.15 + zN * 6.2;
       if (!legoOn) {
-        b = 0.28 + zN * 0.72;
+        b = 0.2 + zN * 0.8;
         colors[i * 3] = b;
-        colors[i * 3 + 1] = Math.min(1, b * 1.03);
-        colors[i * 3 + 2] = Math.min(1, b * 1.08);
+        colors[i * 3 + 1] = Math.min(1, b * 1.04);
+        colors[i * 3 + 2] = Math.min(1, b * 1.1);
       }
     }
 
@@ -513,7 +551,8 @@
     imgPts = sample.pts;
     imgW = sample.w;
     imgH = sample.h;
-    count = imgPts.length / 3;
+    ptStride = sample.stride || 3;
+    count = imgPts.length / ptStride;
     rest = new Float32Array(count * 2);
     scatter = new Float32Array(count * 2);
     vel = new Float32Array(count * 2);
