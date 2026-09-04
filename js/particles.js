@@ -46,9 +46,16 @@
   var legoOn = false;
   var lookYaw = 0;
   var lookPitch = 0;
-  var LOOK_YAW_MAX = 0.28;
-  var LOOK_PITCH_MAX = 0.2;
-  var LOOK_DEPTH = 42;
+  var LOOK_YAW_MAX = 0.32;
+  var LOOK_PITCH_MAX = 0.22;
+  var LOOK_DEPTH = 78;
+  var HEAD_CUT = 0.56;
+  var sizes = null;
+  var baseDepth = null;
+  var isHead = null;
+  var neckY = 0;
+  var pointMat = null;
+  var legoMat = null;
   var studTex = null;
   var colors = null;
   var BRICK_RGB = [
@@ -144,12 +151,22 @@
   }
 
   function syncRest(L) {
-    var i, px, py;
+    var i, px, py, fx, fy, r2, sphere, lum, amp;
+    amp = LOOK_DEPTH * L.scale;
+    neckY = (imgH / 2 - imgH * 0.52) * L.scale + L.yLift;
     for (i = 0; i < count; i++) {
       px = imgPts[i * 3];
       py = imgPts[i * 3 + 1];
+      lum = imgPts[i * 3 + 2];
       rest[i * 2] = (px - imgW / 2) * L.scale;
       rest[i * 2 + 1] = (imgH / 2 - py) * L.scale + L.yLift;
+      isHead[i] = py < imgH * HEAD_CUT ? 1 : 0;
+      fx = (px - imgW / 2) / imgW;
+      fy = (py - imgH * 0.34) / imgH;
+      r2 = fx * fx + fy * fy * 1.15;
+      sphere = Math.sqrt(Math.max(0, 0.2 - r2));
+      baseDepth[i] = (sphere * 0.75 + (lum / 255) * 0.35) * amp;
+      if (!isHead[i]) baseDepth[i] *= 0.55;
     }
     buildScatter(L);
   }
@@ -225,22 +242,32 @@
 
   function applyLegoMode() {
     if (!points) return;
-    var mat = points.material;
+    var i, brick;
     if (legoOn) {
       if (!studTex) studTex = makeStudTexture();
-      mat.map = studTex;
-      mat.vertexColors = true;
-      mat.size = 7;
-      mat.transparent = true;
-      mat.alphaTest = 0.12;
+      if (!legoMat) {
+        legoMat = new THREE.PointsMaterial({
+          map: studTex,
+          size: 7,
+          sizeAttenuation: false,
+          transparent: true,
+          alphaTest: 0.12,
+          depthWrite: false,
+          vertexColors: true,
+        });
+      }
+      for (i = 0; i < count; i++) {
+        brick = BRICK_RGB[i % BRICK_RGB.length];
+        colors[i * 3] = brick[0];
+        colors[i * 3 + 1] = brick[1];
+        colors[i * 3 + 2] = brick[2];
+      }
+      points.geometry.attributes.aColor.needsUpdate = true;
+      points.material = legoMat;
     } else {
-      mat.map = null;
-      mat.vertexColors = false;
-      mat.size = 2.4;
-      mat.transparent = false;
-      mat.alphaTest = 0;
+      if (!pointMat) pointMat = makePointMaterial();
+      points.material = pointMat;
     }
-    mat.needsUpdate = true;
   }
 
   function setLookFromEvent(ev) {
@@ -257,9 +284,9 @@
     return { yaw: nx * LOOK_YAW_MAX, pitch: ny * LOOK_PITCH_MAX };
   }
 
-  function rotateRest(rx, ry, depth, yaw, pitch, cy) {
+  function rotateHead(rx, ry, depth, yaw, pitch, pivotY) {
     var x = rx;
-    var y = ry - cy;
+    var y = ry - pivotY;
     var z = depth;
     var cosY = Math.cos(yaw);
     var sinY = Math.sin(yaw);
@@ -268,48 +295,100 @@
     var x1 = x * cosY + z * sinY;
     var z1 = -x * sinY + z * cosY;
     var y1 = y * cosX - z1 * sinX;
-    return { x: x1, y: y1 + cy };
+    var z2 = y * sinX + z1 * cosX;
+    return { x: x1, y: y1 + pivotY, z: z2 };
+  }
+
+  function makePointMaterial() {
+    return new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: {},
+      vertexShader: [
+        "attribute float aSize;",
+        "attribute vec3 aColor;",
+        "varying vec3 vColor;",
+        "varying float vAlpha;",
+        "void main() {",
+        "  vColor = aColor;",
+        "  vAlpha = 0.72 + aSize * 0.04;",
+        "  vec4 mv = modelViewMatrix * vec4(position, 1.0);",
+        "  gl_PointSize = aSize * (300.0 / max(60.0, -mv.z + 220.0));",
+        "  gl_Position = projectionMatrix * mv;",
+        "}"
+      ].join("\n"),
+      fragmentShader: [
+        "varying vec3 vColor;",
+        "varying float vAlpha;",
+        "void main() {",
+        "  vec2 c = gl_PointCoord - vec2(0.5);",
+        "  float d = dot(c, c);",
+        "  if (d > 0.25) discard;",
+        "  float soft = 1.0 - smoothstep(0.12, 0.25, d);",
+        "  gl_FragColor = vec4(vColor, soft * clamp(vAlpha, 0.0, 1.0));",
+        "}"
+      ].join("\n"),
+    });
   }
 
   function step() {
     var L = layout();
     openAmt += ((menuOn ? 1 : 0) - openAmt) * 0.12;
 
-    var i, x, y, tx, ty, rx, ry, depth, rot;
+    var i, x, y, tx, ty, rx, ry, rz, depth, rot, zN, b, cyan;
     var t = performance.now() * 0.001;
-    var spring = menuOn ? 0.075 : 0.09;
+    var spring = 0.09;
     var damp = 0.8;
     var want = lookTargets(L);
     lookYaw += (want.yaw - lookYaw) * 0.08;
     lookPitch += (want.pitch - lookPitch) * 0.08;
-    var faceCy = L.yLift;
-    var depthScale = LOOK_DEPTH * L.scale;
+    var amp = LOOK_DEPTH * L.scale;
+    var idle;
 
     for (i = 0; i < count; i++) {
       x = positions[i * 3];
       y = positions[i * 3 + 1];
-      depth = (imgPts[i * 3 + 2] / 255 - 0.42) * depthScale;
-      rot = rotateRest(rest[i * 2], rest[i * 2 + 1], depth, lookYaw, lookPitch, faceCy);
-      rx = rot.x;
-      ry = rot.y;
+      depth = baseDepth[i];
+      if (isHead[i]) {
+        rot = rotateHead(rest[i * 2], rest[i * 2 + 1], depth, lookYaw, lookPitch, neckY);
+        rx = rot.x;
+        ry = rot.y;
+        rz = rot.z;
+      } else {
+        rx = rest[i * 2];
+        ry = rest[i * 2 + 1];
+        rz = depth * 0.35;
+      }
       tx = rx + (scatter[i * 2] - rest[i * 2]) * openAmt;
       ty = ry + (scatter[i * 2 + 1] - rest[i * 2 + 1]) * openAmt;
-      if (openAmt < 0.98) {
-        var idle = 1 - openAmt;
-        tx += Math.sin(t * 1.15 + i * 2.17) * 0.55 * idle;
-        ty += Math.cos(t * 0.97 + i * 1.73) * 0.45 * idle;
+      idle = 1 - openAmt;
+      if (idle > 0.02) {
+        tx += Math.sin(t * 1.15 + i * 2.17) * 0.45 * idle;
+        ty += Math.cos(t * 0.97 + i * 1.73) * 0.35 * idle;
       }
 
       vel[i * 2] += (tx - x) * spring;
       vel[i * 2 + 1] += (ty - y) * spring;
-
       vel[i * 2] *= damp;
       vel[i * 2 + 1] *= damp;
       positions[i * 3] = x + vel[i * 2];
       positions[i * 3 + 1] = y + vel[i * 2 + 1];
+      positions[i * 3 + 2] = rz;
+
+      zN = clamp((rz / Math.max(1, amp) + 0.15) / 1.15, 0, 1);
+      sizes[i] = (isHead[i] ? 2.1 : 1.7) + zN * (isHead[i] ? 3.4 : 1.6);
+      b = 0.42 + zN * 0.58;
+      cyan = 0.08 * zN;
+      if (!legoOn) {
+        colors[i * 3] = b * (0.92 + cyan * 0.2);
+        colors[i * 3 + 1] = b * (0.95 + cyan * 0.5);
+        colors[i * 3 + 2] = Math.min(1, b * (1.0 + cyan));
+      }
     }
 
     points.geometry.attributes.position.needsUpdate = true;
+    points.geometry.attributes.aSize.needsUpdate = true;
+    if (!legoOn) points.geometry.attributes.aColor.needsUpdate = true;
     renderer.render(scene, camera);
     requestAnimationFrame(step);
   }
@@ -386,6 +465,10 @@
     scatter = new Float32Array(count * 2);
     vel = new Float32Array(count * 2);
     positions = new Float32Array(count * 3);
+    sizes = new Float32Array(count);
+    baseDepth = new Float32Array(count);
+    isHead = new Uint8Array(count);
+    colors = new Float32Array(count * 3);
     var L = layout();
     applyCamera(L);
     syncRest(L);
@@ -393,27 +476,19 @@
     for (i = 0; i < count; i++) {
       positions[i * 3] = rest[i * 2];
       positions[i * 3 + 1] = rest[i * 2 + 1];
-      positions[i * 3 + 2] = 0;
-    }
-    colors = new Float32Array(count * 3);
-    var i, brick;
-    for (i = 0; i < count; i++) {
-      brick = BRICK_RGB[i % BRICK_RGB.length];
-      colors[i * 3] = brick[0];
-      colors[i * 3 + 1] = brick[1];
-      colors[i * 3 + 2] = brick[2];
+      positions[i * 3 + 2] = baseDepth[i];
+      sizes[i] = 2.4;
+      colors[i * 3] = 0.85;
+      colors[i * 3 + 1] = 0.9;
+      colors[i * 3 + 2] = 1.0;
     }
     var geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+    geo.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    var mat = new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 2.4,
-      sizeAttenuation: false,
-      depthWrite: false,
-      vertexColors: false,
-    });
-    points = new THREE.Points(geo, mat);
+    pointMat = makePointMaterial();
+    points = new THREE.Points(geo, pointMat);
     scene.add(points);
     bind();
     requestAnimationFrame(step);
