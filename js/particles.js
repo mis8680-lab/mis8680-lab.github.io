@@ -49,9 +49,13 @@
   var LOOK_YAW_MAX = 0.34;
   var LOOK_PITCH_MAX = 0.24;
   var LOOK_DEPTH = 96;
-  var FACE_FULL = 0.30;
-  var NECK_END = 0.52;
-  var TORSO_ZERO = 0.70;
+  var FACE_CX = 0.5;
+  var FACE_CY = 0.35;
+  var FACE_RX = 0.22;
+  var FACE_RY = 0.30;
+  var NECK_CY = 0.52;
+  var NECK_RX = 0.12;
+  var NECK_RY = 0.10;
   var studTex = null;
   var colors = null;
   var sizes = null;
@@ -162,7 +166,7 @@
   function syncRest(L) {
     var i, px, py, fx, fy, r2, sphere, lum, amp, ny, w, face, neck;
     amp = LOOK_DEPTH * L.scale;
-    neckY = (imgH / 2 - imgH * 0.48) * L.scale + L.yLift;
+    neckY = (imgH / 2 - imgH * FACE_CY - imgH * FACE_RY * 0.55) * L.scale + L.yLift;
     for (i = 0; i < count; i++) {
       px = imgPts[i * 3];
       py = imgPts[i * 3 + 1];
@@ -170,18 +174,27 @@
       rest[i * 2] = (px - imgW / 2) * L.scale;
       rest[i * 2 + 1] = (imgH / 2 - py) * L.scale + L.yLift;
       ny = py / imgH;
-      /* 2-band: face full, neck partial, torso locked */
-      face = 1 - smoothstep(FACE_FULL, NECK_END, ny);
-      neck = smoothstep(FACE_FULL, NECK_END * 0.85, ny) * (1 - smoothstep(NECK_END, TORSO_ZERO, ny));
-      w = Math.min(1, face * 1.0 + neck * 0.55);
-      if (ny >= TORSO_ZERO) w = 0;
+      /* Face ellipse mask — outer floaters / side halo get weight 0 */
+      fx = (px / imgW - FACE_CX) / FACE_RX;
+      fy = (ny - FACE_CY) / FACE_RY;
+      r2 = fx * fx + fy * fy;
+      face = 1 - smoothstep(0.78, 1.12, Math.sqrt(Math.max(0, r2)));
+      /* Neck soft band: narrow, partial weight only */
+      fx = (px / imgW - FACE_CX) / NECK_RX;
+      fy = (ny - NECK_CY) / NECK_RY;
+      r2 = fx * fx + fy * fy;
+      neck = (1 - smoothstep(0.65, 1.15, Math.sqrt(Math.max(0, r2)))) *
+        smoothstep(0.40, 0.48, ny) *
+        (1 - smoothstep(0.56, 0.68, ny));
+      w = Math.min(1, face * 1.0 + neck * 0.5);
+      if (w < 0.04) w = 0;
       headW[i] = w;
       fx = (px - imgW / 2) / imgW;
       fy = (py - imgH * 0.34) / imgH;
       r2 = fx * fx + fy * fy * 1.05;
       sphere = Math.sqrt(Math.max(0, 0.26 - r2));
-      /* Keep Z on torso for volume shading; rotation weight separate */
-      baseDepth[i] = (sphere * 0.82 + (lum / 255) * 0.38) * amp;
+      /* Z emphasis on face; torso stays flat-ish */
+      baseDepth[i] = (sphere * 0.82 + (lum / 255) * 0.38) * amp * (0.18 + 0.82 * Math.max(w, face * 0.5));
     }
     buildScatter(L);
   }
