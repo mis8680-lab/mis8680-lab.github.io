@@ -46,11 +46,12 @@
   var legoOn = false;
   var lookYaw = 0;
   var lookPitch = 0;
-  var LOOK_YAW_MAX = 0.32;
-  var LOOK_PITCH_MAX = 0.22;
-  var LOOK_DEPTH = 52;
-  var HEAD_FULL = 0.40;
-  var HEAD_ZERO = 0.64;
+  var LOOK_YAW_MAX = 0.34;
+  var LOOK_PITCH_MAX = 0.24;
+  var LOOK_DEPTH = 96;
+  var FACE_FULL = 0.30;
+  var NECK_END = 0.52;
+  var TORSO_ZERO = 0.70;
   var studTex = null;
   var colors = null;
   var sizes = null;
@@ -159,9 +160,9 @@
   }
 
   function syncRest(L) {
-    var i, px, py, fx, fy, r2, sphere, lum, amp, ny, w;
+    var i, px, py, fx, fy, r2, sphere, lum, amp, ny, w, face, neck;
     amp = LOOK_DEPTH * L.scale;
-    neckY = (imgH / 2 - imgH * 0.52) * L.scale + L.yLift;
+    neckY = (imgH / 2 - imgH * 0.48) * L.scale + L.yLift;
     for (i = 0; i < count; i++) {
       px = imgPts[i * 3];
       py = imgPts[i * 3 + 1];
@@ -169,14 +170,18 @@
       rest[i * 2] = (px - imgW / 2) * L.scale;
       rest[i * 2 + 1] = (imgH / 2 - py) * L.scale + L.yLift;
       ny = py / imgH;
-      w = 1 - smoothstep(HEAD_FULL, HEAD_ZERO, ny);
+      /* 2-band: face full, neck partial, torso locked */
+      face = 1 - smoothstep(FACE_FULL, NECK_END, ny);
+      neck = smoothstep(FACE_FULL, NECK_END * 0.85, ny) * (1 - smoothstep(NECK_END, TORSO_ZERO, ny));
+      w = Math.min(1, face * 1.0 + neck * 0.55);
+      if (ny >= TORSO_ZERO) w = 0;
       headW[i] = w;
       fx = (px - imgW / 2) / imgW;
       fy = (py - imgH * 0.34) / imgH;
-      r2 = fx * fx + fy * fy * 1.15;
-      sphere = Math.sqrt(Math.max(0, 0.2 - r2));
-      baseDepth[i] = (sphere * 0.75 + (lum / 255) * 0.35) * amp;
-      baseDepth[i] *= 0.4 + 0.6 * w;
+      r2 = fx * fx + fy * fy * 1.05;
+      sphere = Math.sqrt(Math.max(0, 0.26 - r2));
+      /* Keep Z on torso for volume shading; rotation weight separate */
+      baseDepth[i] = (sphere * 0.82 + (lum / 255) * 0.38) * amp;
     }
     buildScatter(L);
   }
@@ -356,7 +361,8 @@
       y = positions[i * 3 + 1];
       depth = baseDepth[i];
       w = headW[i];
-      if (w > 0.001) {
+      /* Per-point aWeight × neck pivot only — no camera/scene/points transform */
+      if (w > 0.02) {
         rot = rotateHead(
           rest[i * 2],
           rest[i * 2 + 1],
@@ -371,14 +377,14 @@
       } else {
         rx = rest[i * 2];
         ry = rest[i * 2 + 1];
-        rz = depth * 0.2;
+        rz = depth;
       }
       tx = rx + (scatter[i * 2] - rest[i * 2]) * openAmt;
       ty = ry + (scatter[i * 2 + 1] - rest[i * 2 + 1]) * openAmt;
       idle = 1 - openAmt;
       if (idle > 0.02) {
-        tx += Math.sin(t * 1.15 + i * 2.17) * 0.45 * idle;
-        ty += Math.cos(t * 0.97 + i * 1.73) * 0.35 * idle;
+        tx += Math.sin(t * 1.15 + i * 2.17) * 0.4 * idle;
+        ty += Math.cos(t * 0.97 + i * 1.73) * 0.32 * idle;
       }
 
       vel[i * 2] += (tx - x) * spring;
@@ -389,13 +395,14 @@
       positions[i * 3 + 1] = y + vel[i * 2 + 1];
       positions[i * 3 + 2] = rz;
 
-      zN = clamp((rz / amp + 0.2) / 1.2, 0, 1);
-      sizes[i] = (1.8 + 0.4 * w) + zN * (1.2 + 1.6 * w);
+      zN = clamp((rz / amp + 0.05) / 1.05, 0, 1);
+      zN = zN * zN * (3 - 2 * zN);
+      sizes[i] = 1.4 + zN * 4.6;
       if (!legoOn) {
-        b = 0.48 + zN * 0.52;
+        b = 0.28 + zN * 0.72;
         colors[i * 3] = b;
-        colors[i * 3 + 1] = Math.min(1, b * 1.02);
-        colors[i * 3 + 2] = Math.min(1, b * 1.06);
+        colors[i * 3 + 1] = Math.min(1, b * 1.03);
+        colors[i * 3 + 2] = Math.min(1, b * 1.08);
       }
     }
 
