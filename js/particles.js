@@ -326,7 +326,7 @@
     var dy = lookTarget.y - neckY;
     var dz = LOOK_TARGET_Z;
     var yaw = Math.atan2(dx, Math.max(0.001, dz));
-    var pitch = Math.atan2(dy, Math.sqrt(dx * dx + dz * dz));
+    var pitch = -Math.atan2(dy, Math.sqrt(dx * dx + dz * dz));
     yaw = clamp(yaw, -LOOK_YAW_MAX, LOOK_YAW_MAX);
     pitch = clamp(pitch, -LOOK_PITCH_MAX, LOOK_PITCH_MAX);
     return { yaw: yaw, pitch: pitch };
