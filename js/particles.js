@@ -432,19 +432,19 @@
       y = positions[i * 3 + 1];
       depth = baseDepth[i];
       w = headW[i];
-      /* Per-point aWeight × neck pivot only — no camera/scene/points transform */
+      /* Rigid 3D rot around neck, then blend by aWeight (avoids shear from yaw*w) */
       if (w > 0.02) {
         rot = rotateHead(
           rest[i * 2],
           rest[i * 2 + 1],
           depth,
-          lookYaw * w,
-          lookPitch * w,
+          lookYaw,
+          lookPitch,
           neckY
         );
-        rx = rot.x;
-        ry = rot.y;
-        rz = rot.z;
+        rx = rest[i * 2] + (rot.x - rest[i * 2]) * w;
+        ry = rest[i * 2 + 1] + (rot.y - rest[i * 2 + 1]) * w;
+        rz = depth + (rot.z - depth) * w;
       } else {
         rx = rest[i * 2];
         ry = rest[i * 2 + 1];
