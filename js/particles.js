@@ -43,6 +43,11 @@
   var hoverOrigin = null;
   var hoverReady = false;
   var legoOn = false;
+  var lookYaw = 0;
+  var lookPitch = 0;
+  var LOOK_YAW_MAX = 0.28;
+  var LOOK_PITCH_MAX = 0.2;
+  var LOOK_DEPTH = 42;
   var studTex = null;
   var colors = null;
   var BRICK_RGB = [
@@ -248,21 +253,51 @@
     mat.needsUpdate = true;
   }
 
+  function lookTargets(L) {
+    if (!pointer.over) return { yaw: 0, pitch: 0 };
+    var nx = clamp(pointer.x / (L.w * 0.42), -1, 1);
+    var ny = clamp(pointer.y / (L.h * 0.42), -1, 1);
+    return { yaw: nx * LOOK_YAW_MAX, pitch: ny * LOOK_PITCH_MAX };
+  }
+
+  function rotateRest(rx, ry, depth, yaw, pitch, cy) {
+    var x = rx;
+    var y = ry - cy;
+    var z = depth;
+    var cosY = Math.cos(yaw);
+    var sinY = Math.sin(yaw);
+    var cosX = Math.cos(pitch);
+    var sinX = Math.sin(pitch);
+    var x1 = x * cosY + z * sinY;
+    var z1 = -x * sinY + z * cosY;
+    var y1 = y * cosX - z1 * sinX;
+    return { x: x1, y: y1 + cy };
+  }
+
   function step() {
     var L = layout();
     openAmt += ((menuOn ? 1 : 0) - openAmt) * 0.12;
 
-    var i, x, y, tx, ty, dx, dy, d, f, inv;
+    var i, x, y, tx, ty, dx, dy, d, f, inv, rx, ry, depth, rot;
     var t = performance.now() * 0.001;
     var spring = menuOn ? 0.075 : 0.09;
     var damp = 0.8;
     var mouseOn = pointer.over || pointer.active;
+    var want = lookTargets(L);
+    lookYaw += (want.yaw - lookYaw) * 0.08;
+    lookPitch += (want.pitch - lookPitch) * 0.08;
+    var faceCy = L.yLift;
+    var depthScale = LOOK_DEPTH * L.scale;
 
     for (i = 0; i < count; i++) {
       x = positions[i * 3];
       y = positions[i * 3 + 1];
-      tx = rest[i * 2] + (scatter[i * 2] - rest[i * 2]) * openAmt;
-      ty = rest[i * 2 + 1] + (scatter[i * 2 + 1] - rest[i * 2 + 1]) * openAmt;
+      depth = (imgPts[i * 3 + 2] / 255 - 0.42) * depthScale;
+      rot = rotateRest(rest[i * 2], rest[i * 2 + 1], depth, lookYaw, lookPitch, faceCy);
+      rx = rot.x;
+      ry = rot.y;
+      tx = rx + (scatter[i * 2] - rest[i * 2]) * openAmt;
+      ty = ry + (scatter[i * 2 + 1] - rest[i * 2 + 1]) * openAmt;
       if (openAmt < 0.98) {
         var idle = 1 - openAmt;
         tx += Math.sin(t * 1.15 + i * 2.17) * 0.55 * idle;
