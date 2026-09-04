@@ -181,13 +181,19 @@
   }
 
   function openMenu() {
-    /* Scatter disabled — top nav is always available. */
-    menuOn = false;
+    menuOn = true;
+    if (menu) menu.style.pointerEvents = "none";
+    setMenu(true);
+    setTimeout(function () {
+      if (menuOn && menu) menu.style.pointerEvents = "auto";
+    }, 320);
   }
 
   function closeMenu() {
     menuOn = false;
+    setMenu(false);
     suppressHoverOpen = true;
+    if (menu) menu.style.pointerEvents = "";
   }
 
   function isMenuLink(el) {
@@ -343,7 +349,11 @@
         legoOn = !legoOn;
         applyLegoMode();
       }
-      /* No click/tap scatter — look-at + idle shimmer + Lego only. */
+      if (menuOn) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
     });
     window.addEventListener("pointerup", function (ev) {
       setPointer(ev, false);
