@@ -5,6 +5,14 @@
   if (!nav.id) nav.id = "site-nav";
   toggle.setAttribute("aria-controls", nav.id);
 
+  var path = (location.pathname.split("/").pop() || "").toLowerCase();
+  if (!path || path === "index.html") path = "";
+  Array.prototype.forEach.call(nav.querySelectorAll("a[href]"), function (a) {
+    var href = (a.getAttribute("href") || "").split("/").pop().toLowerCase();
+    if (href && href === path) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+
   function setOpen(open) {
     nav.classList.toggle("is-open", open);
     toggle.setAttribute("aria-expanded", open ? "true" : "false");
