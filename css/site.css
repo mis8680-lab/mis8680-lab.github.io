@@ -47,9 +47,7 @@ body.home {
 
 .site-nav a {
   position: relative;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
+  display: inline-block;
   color: rgba(255, 255, 255, 0.42);
   text-decoration: none;
   font-size: 14px;
@@ -57,6 +55,7 @@ body.home {
   letter-spacing: 0.06em;
   line-height: 1;
   text-transform: uppercase;
+  /* baseline stays put — underdot is absolute, no layout shift */
 }
 
 .site-nav a:hover,
@@ -70,12 +69,16 @@ body.home {
 
 .site-nav a[aria-current="page"]::after {
   content: "";
-  display: block;
+  position: absolute;
+  left: 50%;
+  top: 100%;
   width: 4px;
   height: 4px;
-  margin-top: 0.5rem;
+  margin-top: 0.45rem;
   border-radius: 50%;
   background: #fff;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 @media (max-width: 700px) {
