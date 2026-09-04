@@ -275,11 +275,10 @@
     var L = layout();
     openAmt += ((menuOn ? 1 : 0) - openAmt) * 0.12;
 
-    var i, x, y, tx, ty, dx, dy, d, f, inv, rx, ry, depth, rot;
+    var i, x, y, tx, ty, rx, ry, depth, rot;
     var t = performance.now() * 0.001;
     var spring = menuOn ? 0.075 : 0.09;
     var damp = 0.8;
-    var mouseOn = pointer.over || pointer.active;
     var want = lookTargets(L);
     lookYaw += (want.yaw - lookYaw) * 0.08;
     lookPitch += (want.pitch - lookPitch) * 0.08;
@@ -303,18 +302,6 @@
 
       vel[i * 2] += (tx - x) * spring;
       vel[i * 2 + 1] += (ty - y) * spring;
-
-      if (mouseOn) {
-        dx = x - pointer.x;
-        dy = y - pointer.y;
-        d = Math.hypot(dx, dy);
-        if (d < L.mouseR && d > 0.05) {
-          f = (1 - d / L.mouseR) * L.mouseForce;
-          inv = 1 / d;
-          vel[i * 2] += dx * inv * f;
-          vel[i * 2 + 1] += dy * inv * f;
-        }
-      }
 
       vel[i * 2] *= damp;
       vel[i * 2 + 1] *= damp;
