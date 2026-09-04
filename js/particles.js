@@ -181,19 +181,13 @@
   }
 
   function openMenu() {
-    menuOn = true;
-    if (menu) menu.style.pointerEvents = "none";
-    setMenu(true);
-    setTimeout(function () {
-      if (menuOn && menu) menu.style.pointerEvents = "auto";
-    }, 320);
+    /* Scatter disabled — top nav is always available. */
+    menuOn = false;
   }
 
   function closeMenu() {
     menuOn = false;
-    setMenu(false);
     suppressHoverOpen = true;
-    if (menu) menu.style.pointerEvents = "";
   }
 
   function isMenuLink(el) {
@@ -356,17 +350,13 @@
     window.addEventListener("pointerdown", function (ev) {
       setLookFromEvent(ev);
       setPointer(ev, true);
-      if (isMenuLink(ev.target) || (ev.target && ev.target.closest && ev.target.closest(".wordmark"))) return;
+      if (isMenuLink(ev.target) || (ev.target && ev.target.closest && (ev.target.closest(".wordmark") || ev.target.closest(".nav-toggle") || ev.target.closest(".site-nav")))) return;
       fieldClicks += 1;
       if (fieldClicks % 5 === 0) {
         legoOn = !legoOn;
         applyLegoMode();
       }
-      if (menuOn) {
-        closeMenu();
-      } else {
-        openMenu();
-      }
+      /* No click/tap scatter — look-at + idle shimmer + Lego only. */
     });
     window.addEventListener("pointerup", function (ev) {
       setPointer(ev, false);
