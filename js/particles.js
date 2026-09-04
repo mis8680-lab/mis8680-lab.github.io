@@ -49,9 +49,8 @@
   var lookPitch = 0;
   var LOOK_YAW_MAX = 0.38;
   var LOOK_PITCH_MAX = 0.26;
-  var LOOK_DEPTH = 118;
+  var LOOK_DEPTH = 170;
   var LOOK_TARGET_Z = 2;
-  var LOOK_DEBUG = /(?:\?|&)lookDebug=1(?:&|$)/.test(location.search);
   var mouseNDC = new THREE.Vector2();
   var lookRay = new THREE.Raycaster();
   var lookPlane = new THREE.Plane();
@@ -223,15 +222,14 @@
       fx = (px / imgW - FACE_CX) / FACE_RX;
       fy = (ny - FACE_CY) / FACE_RY;
       r2 = fx * fx + fy * fy;
-      face = 1 - smoothstep(0.88, 1.05, Math.sqrt(Math.max(0, r2)));
+      face = 1 - smoothstep(0.78, 1.12, Math.sqrt(Math.max(0, r2)));
       fx = (px / imgW - FACE_CX) / NECK_RX;
       fy = (ny - NECK_CY) / NECK_RY;
       r2 = fx * fx + fy * fy;
       neck = (1 - smoothstep(0.65, 1.15, Math.sqrt(Math.max(0, r2)))) *
         smoothstep(0.40, 0.48, ny) *
         (1 - smoothstep(0.56, 0.68, ny));
-      w = Math.min(1, face * 1.0 + neck * 0.55);
-      if (face > 0.85) w = 1;
+      w = Math.min(1, face * 1.0 + neck * 0.5);
       if (w < 0.04) w = 0;
       headW[i] = w;
       /* Half-ellipsoid volume (ref-like thickness) + silhouette inflate + lum relief */
@@ -360,7 +358,8 @@
   }
 
   function lookTargets(L) {
-    if (LOOK_DEBUG) return { yaw: 0.36, pitch: -0.18 };
+    /* look-at HOLDED per Insu — front volumetric only */
+    return { yaw: 0, pitch: 0 };
     if (!look.tracking) return { yaw: 0, pitch: 0 };
     /* yaw/pitch from neck pivot toward look target (fixed Z) */
     var dx = lookTarget.x - 0;
@@ -423,8 +422,8 @@
 
     var i, x, y, tx, ty, rx, ry, rz, depth, rot, zN, b, idle, w;
     var t = performance.now() * 0.001;
-    var spring = 0.2;
-    var damp = 0.72;
+    var spring = 0.09;
+    var damp = 0.8;
     var want = lookTargets(L);
     lookYaw += (want.yaw - lookYaw) * 0.08;
     lookPitch += (want.pitch - lookPitch) * 0.08;
@@ -435,24 +434,10 @@
       y = positions[i * 3 + 1];
       depth = baseDepth[i];
       w = headW[i];
-      /* Full rigid rot or rest — no lerp ghost (double eyes/nose) */
-      if (w >= 0.42) {
-        rot = rotateHead(
-          rest[i * 2],
-          rest[i * 2 + 1],
-          depth,
-          lookYaw,
-          lookPitch,
-          neckY
-        );
-        rx = rot.x;
-        ry = rot.y;
-        rz = rot.z;
-      } else {
-        rx = rest[i * 2];
-        ry = rest[i * 2 + 1];
-        rz = depth;
-      }
+      /* look-at HOLDED — front volumetric rest pose only */
+      rx = rest[i * 2];
+      ry = rest[i * 2 + 1];
+      rz = depth;
       tx = rx + (scatter[i * 2] - rest[i * 2]) * openAmt;
       ty = ry + (scatter[i * 2 + 1] - rest[i * 2 + 1]) * openAmt;
       idle = 1 - openAmt;
@@ -470,10 +455,10 @@
       positions[i * 3 + 2] = rz;
 
       zN = clamp(rz / Math.max(1, amp), 0, 1);
-      zN = Math.pow(zN, 0.9);
-      sizes[i] = 1.25 + zN * 4.3;
+      zN = Math.pow(zN, 0.85);
+      sizes[i] = 1.15 + zN * 6.2;
       if (!legoOn) {
-        b = 0.3 + zN * 0.7;
+        b = 0.2 + zN * 0.8;
         colors[i * 3] = b;
         colors[i * 3 + 1] = Math.min(1, b * 1.04);
         colors[i * 3 + 2] = Math.min(1, b * 1.1);
