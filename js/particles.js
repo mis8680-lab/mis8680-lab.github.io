@@ -10,7 +10,7 @@
   var TARGET_PARTICLES = 11000;
 
   var canvas = document.getElementById("field");
-  var menu = document.getElementById("hole-menu");
+  var menu = document.getElementById("site-nav");
   if (!canvas || typeof THREE === "undefined") return;
 
   var renderer = new THREE.WebGLRenderer({
@@ -175,13 +175,8 @@
   }
 
   function setMenu(open) {
+    /* Top-right nav stays visible; open only drives particle scatter. */
     if (!menu) return;
-    if (open) {
-      menu.hidden = false;
-      menu.classList.add("is-open");
-    } else {
-      menu.classList.remove("is-open");
-    }
   }
 
   function openMenu() {
@@ -201,7 +196,7 @@
   }
 
   function isMenuLink(el) {
-    return !!(el && el.closest && el.closest(".hole-menu a"));
+    return !!(el && el.closest && el.closest(".site-nav a"));
   }
 
   function makeStudTexture() {
