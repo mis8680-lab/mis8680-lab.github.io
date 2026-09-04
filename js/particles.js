@@ -1,13 +1,14 @@
 (function () {
   "use strict";
 
-  var IMAGE_URL = "assets/insu-stipple.png";
+  var IMAGE_URL = (typeof window !== "undefined" && window.__PARTICLE_IMAGE_URL) || "assets/insu-stipple.png";
   var DESKTOP_FACE = 640;
   var PHONE_FACE = 360;
   var DESKTOP_W = 1280;
   var PHONE_W = 390;
   var MENU_NY = 0.46;
-  var TARGET_PARTICLES = 11000;
+  var TARGET_PARTICLES = 14500;
+  var FIELD_PARTICLES = 980;
 
   var canvas = document.getElementById("field");
   var menu = document.getElementById("site-nav");
@@ -32,6 +33,7 @@
   var scatter = null;
   var vel = null;
   var imgPts = null;
+  var imgEdge = null;
   var count = 0;
   var imgW = 1;
   var imgH = 1;
@@ -51,6 +53,15 @@
   var LOOK_DEPTH = 42;
   var studTex = null;
   var colors = null;
+  var sizes = null;
+  var glowColors = null;
+  var glowMat = null;
+  var legoMat = null;
+  var field = null;
+  var fieldPos = null;
+  var fieldBase = null;
+  var fieldSizes = null;
+  var fieldColors = null;
   var BRICK_RGB = [
     [0.79, 0.1, 0.11],
     [0.95, 0.8, 0.12],
@@ -106,6 +117,27 @@
     if (down === false) pointer.active = false;
   }
 
+  function takeStride4(src, n, keep, outPts, outEdge) {
+    var i, acc, step;
+    if (n <= keep) {
+      for (i = 0; i < n; i++) {
+        outPts.push(src[i * 4], src[i * 4 + 1], src[i * 4 + 2]);
+        outEdge.push(src[i * 4 + 3]);
+      }
+      return;
+    }
+    step = n / keep;
+    acc = 0;
+    for (i = 0; i < n && outPts.length / 3 < keep; i++) {
+      acc += 1;
+      if (acc >= step) {
+        acc -= step;
+        outPts.push(src[i * 4], src[i * 4 + 1], src[i * 4 + 2]);
+        outEdge.push(src[i * 4 + 3]);
+      }
+    }
+  }
+
   function sampleImage(img) {
     var maxDim = 820;
     var s = Math.min(1, maxDim / Math.max(img.width, img.height));
@@ -117,30 +149,42 @@
     var ctx = c.getContext("2d", { willReadFrequently: true });
     ctx.drawImage(img, 0, 0, w, h);
     var data = ctx.getImageData(0, 0, w, h).data;
-    var hits = [];
-    var i, x, y, lum;
+    var lumMap = new Float32Array(w * h);
+    var i, x, y, lum, p, minN, edge;
+    for (i = 0; i < w * h; i++) {
+      if (data[i * 4 + 3] < 20) lumMap[i] = 0;
+      else lumMap[i] = data[i * 4] * 0.299 + data[i * 4 + 1] * 0.587 + data[i * 4 + 2] * 0.114;
+    }
+    var edges = [];
+    var fills = [];
     for (y = 0; y < h; y++) {
       for (x = 0; x < w; x++) {
-        i = (y * w + x) * 4;
-        if (data[i + 3] < 20) continue;
-        lum = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-        if (lum > 42) hits.push(x, y, lum);
+        p = y * w + x;
+        lum = lumMap[p];
+        if (lum <= 12) continue;
+        minN = lum;
+        if (x > 0) minN = Math.min(minN, lumMap[p - 1]);
+        else minN = 0;
+        if (x < w - 1) minN = Math.min(minN, lumMap[p + 1]);
+        else minN = 0;
+        if (y > 0) minN = Math.min(minN, lumMap[p - w]);
+        else minN = 0;
+        if (y < h - 1) minN = Math.min(minN, lumMap[p + w]);
+        else minN = 0;
+        edge = lum - minN;
+        if (edge > 16 && lum > 16) edges.push(x, y, lum, edge);
+        else if (lum > 42) fills.push(x, y, lum, edge);
       }
     }
-    var n = hits.length / 3;
-    var keep = Math.min(TARGET_PARTICLES, n);
+    var edgeN = edges.length / 4;
+    var fillN = fills.length / 4;
+    var edgeKeep = Math.min(edgeN, Math.round(TARGET_PARTICLES * 0.42));
+    var fillKeep = Math.min(fillN, TARGET_PARTICLES - edgeKeep);
     var chosen = [];
-    if (n <= keep) return { pts: hits, w: w, h: h };
-    var step = n / keep;
-    var acc = 0;
-    for (i = 0; i < n && chosen.length / 3 < keep; i++) {
-      acc += 1;
-      if (acc >= step) {
-        acc -= step;
-        chosen.push(hits[i * 3], hits[i * 3 + 1], hits[i * 3 + 2]);
-      }
-    }
-    return { pts: chosen, w: w, h: h };
+    var chosenEdge = [];
+    takeStride4(edges, edgeN, edgeKeep, chosen, chosenEdge);
+    takeStride4(fills, fillN, fillKeep, chosen, chosenEdge);
+    return { pts: chosen, edges: chosenEdge, w: w, h: h };
   }
 
   function syncRest(L) {
@@ -173,6 +217,102 @@
       scatter[i * 2] = sx;
       scatter[i * 2 + 1] = sy;
     }
+  }
+
+  function glowTint(lum, edge) {
+    var e = clamp(edge / 72, 0, 1);
+    var l = clamp(lum / 255, 0, 1);
+    var w = clamp(e * 0.82 + l * 0.18, 0, 1);
+    return [0.16 + w * 0.78, 0.74 + w * 0.24, 0.9 + w * 0.1];
+  }
+
+  function glowSize(lum, edge, L) {
+    var e = clamp(edge / 72, 0, 1);
+    var px = 3.35 + e * 3.55 + clamp(lum / 255, 0, 1) * 0.55;
+    if (L.w >= 900) px *= 1.12;
+    return px;
+  }
+
+  function syncSizes(L) {
+    if (!sizes || !imgPts) return;
+    var i, lum, edge;
+    for (i = 0; i < count; i++) {
+      lum = imgPts[i * 3 + 2];
+      edge = imgEdge ? imgEdge[i] : 0;
+      sizes[i] = glowSize(lum, edge, L);
+    }
+    if (points && points.geometry.attributes.aSize) {
+      points.geometry.attributes.aSize.needsUpdate = true;
+    }
+  }
+
+  function syncField(L) {
+    var i, n;
+    if (!fieldBase) return;
+    n = FIELD_PARTICLES;
+    for (i = 0; i < n; i++) {
+      fieldPos[i * 3] = fieldBase[i * 2] * L.w * 1.08;
+      fieldPos[i * 3 + 1] = fieldBase[i * 2 + 1] * L.h * 1.08;
+      fieldPos[i * 3 + 2] = 0;
+    }
+    if (field) field.geometry.attributes.position.needsUpdate = true;
+  }
+
+  function makeGlowMaterial() {
+    return new THREE.ShaderMaterial({
+      vertexShader: [
+        "attribute float aSize;",
+        "attribute vec3 aColor;",
+        "varying vec3 vColor;",
+        "void main() {",
+        "  vColor = aColor;",
+        "  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);",
+        "  gl_Position = projectionMatrix * mvPosition;",
+        "  gl_PointSize = aSize;",
+        "}",
+      ].join("\n"),
+      fragmentShader: [
+        "varying vec3 vColor;",
+        "void main() {",
+        "  vec2 uv = gl_PointCoord - vec2(0.5);",
+        "  float d = length(uv) * 2.0;",
+        "  float core = exp(-d * d * 5.2);",
+        "  float bloom = exp(-d * d * 1.35) * 0.58;",
+        "  float glow = core + bloom;",
+        "  if (glow < 0.018) discard;",
+        "  gl_FragColor = vec4(vColor * glow, glow);",
+        "}",
+      ].join("\n"),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: false,
+    });
+  }
+
+  function makeField(L) {
+    var n = FIELD_PARTICLES;
+    var i, b;
+    fieldPos = new Float32Array(n * 3);
+    fieldBase = new Float32Array(n * 2);
+    fieldSizes = new Float32Array(n);
+    fieldColors = new Float32Array(n * 3);
+    for (i = 0; i < n; i++) {
+      fieldBase[i * 2] = hash01(i, 31) - 0.5;
+      fieldBase[i * 2 + 1] = hash01(i, 32) - 0.5;
+      b = 0.1 + hash01(i, 33) * 0.2;
+      fieldColors[i * 3] = 0.2 + b * 0.15;
+      fieldColors[i * 3 + 1] = 0.55 + b * 0.35;
+      fieldColors[i * 3 + 2] = 0.62 + b * 0.32;
+      fieldSizes[i] = 1.2 + hash01(i, 34) * 2.15;
+    }
+    syncField(L);
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(fieldPos, 3));
+    geo.setAttribute("aSize", new THREE.BufferAttribute(fieldSizes, 1));
+    geo.setAttribute("aColor", new THREE.BufferAttribute(fieldColors, 3));
+    field = new THREE.Points(geo, glowMat);
+    scene.add(field);
   }
 
   function setMenu(open) {
@@ -230,23 +370,19 @@
   }
 
   function applyLegoMode() {
-    if (!points) return;
-    var mat = points.material;
+    if (!points || !legoMat || !glowMat) return;
     if (legoOn) {
       if (!studTex) studTex = makeStudTexture();
-      mat.map = studTex;
-      mat.vertexColors = true;
-      mat.size = 7;
-      mat.transparent = true;
-      mat.alphaTest = 0.12;
+      legoMat.map = studTex;
+      legoMat.vertexColors = true;
+      legoMat.size = 7;
+      legoMat.transparent = true;
+      legoMat.alphaTest = 0.12;
+      legoMat.needsUpdate = true;
+      points.material = legoMat;
     } else {
-      mat.map = null;
-      mat.vertexColors = false;
-      mat.size = 2.4;
-      mat.transparent = false;
-      mat.alphaTest = 0;
+      points.material = glowMat;
     }
-    mat.needsUpdate = true;
   }
 
   function setLookFromEvent(ev) {
@@ -316,6 +452,16 @@
     }
 
     points.geometry.attributes.position.needsUpdate = true;
+
+    if (fieldPos) {
+      var n = FIELD_PARTICLES;
+      for (i = 0; i < n; i++) {
+        fieldPos[i * 3] = fieldBase[i * 2] * L.w * 1.08 + Math.sin(t * 0.18 + i * 0.31) * 2.2;
+        fieldPos[i * 3 + 1] = fieldBase[i * 2 + 1] * L.h * 1.08 + Math.cos(t * 0.14 + i * 0.27) * 1.8;
+      }
+      field.geometry.attributes.position.needsUpdate = true;
+    }
+
     renderer.render(scene, camera);
     requestAnimationFrame(step);
   }
@@ -324,6 +470,8 @@
     var L = layout();
     applyCamera(L);
     syncRest(L);
+    syncSizes(L);
+    syncField(L);
   }
 
   function bind() {
@@ -389,6 +537,7 @@
 
   function start(sample) {
     imgPts = sample.pts;
+    imgEdge = sample.edges;
     imgW = sample.w;
     imgH = sample.h;
     count = imgPts.length / 3;
@@ -406,30 +555,46 @@
       positions[i * 3 + 2] = 0;
     }
     colors = new Float32Array(count * 3);
-    var i, brick;
+    glowColors = new Float32Array(count * 3);
+    sizes = new Float32Array(count);
+    var brick, tint, lum, edge;
     for (i = 0; i < count; i++) {
       brick = BRICK_RGB[i % BRICK_RGB.length];
       colors[i * 3] = brick[0];
       colors[i * 3 + 1] = brick[1];
       colors[i * 3 + 2] = brick[2];
+      lum = imgPts[i * 3 + 2];
+      edge = imgEdge ? imgEdge[i] : 0;
+      tint = glowTint(lum, edge);
+      glowColors[i * 3] = tint[0];
+      glowColors[i * 3 + 1] = tint[1];
+      glowColors[i * 3 + 2] = tint[2];
     }
+    syncSizes(L);
+    glowMat = makeGlowMaterial();
+    legoMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 7,
+      sizeAttenuation: false,
+      depthWrite: false,
+      vertexColors: true,
+      transparent: true,
+      alphaTest: 0.12,
+    });
+    makeField(L);
     var geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    var mat = new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 2.4,
-      sizeAttenuation: false,
-      depthWrite: false,
-      vertexColors: false,
-    });
-    points = new THREE.Points(geo, mat);
+    geo.setAttribute("aColor", new THREE.BufferAttribute(glowColors, 3));
+    geo.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+    points = new THREE.Points(geo, glowMat);
     scene.add(points);
     bind();
     requestAnimationFrame(step);
   }
 
   var img = new Image();
+  img.crossOrigin = "anonymous";
   img.onload = function () {
     start(sampleImage(img));
   };
