@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var IMAGE_URL = "assets/insu-stipple.png";
+  var IMAGE_URL = (typeof window !== "undefined" && window.__PARTICLE_IMAGE_URL) || "assets/insu-stipple.png";
   var DESKTOP_FACE = 640;
   var PHONE_FACE = 360;
   var DESKTOP_W = 1280;
