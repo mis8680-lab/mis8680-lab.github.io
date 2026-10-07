@@ -380,3 +380,19 @@ body.portrait {
     max-width: none;
   }
 }
+
+.home-links {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.home-links a,
+.portrait-copy a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.home-links a:hover,
+.portrait-copy a:hover {
+  text-decoration: underline;
+}
