@@ -298,3 +298,85 @@ body.page {
   width: 24px;
   height: 24px;
 }
+
+.studio-home {
+  position: relative;
+  z-index: 2;
+  max-width: 34rem;
+  padding: 6.5rem 1.75rem 2rem;
+}
+
+.kicker {
+  margin-bottom: 0.85rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.studio-home h1 {
+  max-width: 11ch;
+  font-size: clamp(2.4rem, 7vw, 4.25rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+}
+
+.studio-home p {
+  margin-top: 1.15rem;
+  max-width: 28rem;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+body.home {
+  display: flex;
+  align-items: flex-end;
+}
+
+body.portrait {
+  overflow: hidden;
+  height: 100%;
+}
+
+.portrait-copy {
+  position: fixed;
+  z-index: 3;
+  left: 2.75rem;
+  bottom: 2.25rem;
+  max-width: 24rem;
+}
+
+.portrait-copy h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.portrait-copy p {
+  margin-top: 0.55rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.lede {
+  margin-top: -1.2rem;
+  margin-bottom: 1.6rem;
+}
+
+@media (max-width: 700px) {
+  .studio-home {
+    padding: 6rem 1.35rem 2rem;
+  }
+  .portrait-copy {
+    left: 1.25rem;
+    right: 1.25rem;
+    bottom: 1.35rem;
+    max-width: none;
+  }
+}

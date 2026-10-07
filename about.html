@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>About — Mun Labs</title>
-    <meta name="description" content="Insu Mun, Mun Labs." />
+    <title>Studio — Mun Labs</title>
+    <meta name="description" content="Mun Labs is an AI studio. Agents help write code, catch regressions, and run release and ops." />
     <meta name="theme-color" content="#000000" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <!-- Google tag (gtag.js) -->
@@ -17,28 +17,26 @@
     </script>
     <link rel="stylesheet" href="css/site.css" />
   </head>
-  <body class="page">
+  <body class="page portrait">
     <a class="wordmark" href="./" aria-label="Mun Labs home">MUN LABS</a>
     <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="site-nav">
       <span></span><span></span><span></span>
     </button>
     <nav class="site-nav" aria-label="Primary">
-      <a href="work.html" data-ga-event="nav_work">Work</a>
-      <a href="about.html" data-ga-event="nav_about">About</a>
+      <a href="about.html" data-ga-event="nav_about">Studio</a>
+      <a href="work.html" data-ga-event="nav_work">Products</a>
       <a href="contact.html" data-ga-event="nav_contact">Contact</a>
     </nav>
-    <main class="page-wrap">
-      <h1>About</h1>
-      <div class="stack">
-        <article>
-          <h2>Insu Mun</h2>
-          <p>Mun Labs</p>
-          <p>AI Automation Lab Operator building practical agent-powered workflows.</p>
-          <p>London, Ontario, Canada</p>
-          <p>The portrait fidgets if you keep poking it.</p>
-        </article>
-      </div>
+    <canvas id="field" aria-hidden="true"></canvas>
+    <main class="portrait-copy">
+      <p class="kicker">Studio</p>
+      <h1>An AI studio for shipping products.</h1>
+      <p>Agents help write the code, catch regressions, and run release and ops.</p>
+      <p>Insu Mun. London, Ontario.</p>
+      <p>The portrait fidgets if you keep poking it.</p>
     </main>
+    <script src="vendor/three.min.js"></script>
+    <script src="js/particles.js"></script>
       <script src="js/nav.js"></script>
       <script src="js/links.js"></script>
   </body>
